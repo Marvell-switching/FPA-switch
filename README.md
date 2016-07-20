@@ -1,4 +1,4 @@
-# FPA-logical-switch
+# FPA-switch
 
 The Forwarding Plane Abstraction (FPA) logical switch model is an abstract
 switch specialization for the Marvell® Prestera devices.
