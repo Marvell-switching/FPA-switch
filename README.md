@@ -1,7 +1,7 @@
 # FPA-switch
 
-The Forwarding Plane Abstraction (FPA) logical switch model is an abstract
-switch API for configuring the Marvell® Prestera devices.
+The Forwarding Plane Abstraction (FPA) is an API library for configuring the Marvell® Prestera devices.
+The FPA represents a logical switch data plane model based on ONF switch data plane abstraction model.
 
 The FPA provides API calls to
 support configuring, updating and interrogating Prestera devices tables for certain capabilities. These capabilities can include supported match
