@@ -38,8 +38,6 @@ extern "C" {
 
 #include "fpaLibTypes.h"
 
-extern bool fpa_init_done;
-
 /*******************************************************************************
 * fpaLibPreInit
 *
@@ -278,9 +276,12 @@ FPA_STATUS fpaLibFlowEntryModify
 * COMMENTS:
 *       If a matching entry exists in the table, it must be deleted, 
 *       and if the existing entry has the FPA_SEND_FLOW_REM flag set, 
-*       it should generate a flow removed message. 
-*       If noflow entry currently residing in the requested table matches the 
-*       request, no error is recorded, and no flow table modification occurs.
+*       it should generate a 
+flow removed message. 
+*       If no
+flow entry currently residing in the requested table matches the 
+*       request, no error is recorded, and no 
+flow table modification occurs.
 *
 *******************************************************************************/
 FPA_STATUS fpaLibFlowEntryDelete
@@ -311,7 +312,8 @@ FPA_STATUS fpaLibFlowEntryDelete
 *       FPA_BAD_PARAM             - wrong parameters
 *
 * COMMENTS:
-*       If noflow entry currently residing in the table matches the 
+*       If no
+flow entry currently residing in the table matches the 
 *       cookie, no error is recorded, and no flow table modification occurs.
 *
 *******************************************************************************/
@@ -738,6 +740,42 @@ FPA_STATUS fpaLibGroupEntryBucketGet
     OUT  FPA_GROUP_BUCKET_ENTRY_STC *bucketPtr
 );
 
+/* FPA_NO_MORE - after the last entry */
+FPA_STATUS fpaLibGroupEntryBucketGetNext
+(
+    IN   uint32_t   switchId,
+    IN   uint32_t   groupIdentifier,
+    IN   uint32_t   bucketIndex,
+    OUT  FPA_GROUP_BUCKET_ENTRY_STC *bucketPtr
+);
+
+/*******************************************************************************
+* fpaLibGroupEntryBucketGetIndexByEntry
+*
+* DESCRIPTION:
+*       Get bucket index from a bucket data.
+*       supported only wheb bucket type is FPA_GROUP_BUCKET_L2_REFERENCE_E
+*
+* INPUTS:
+*   	switchId      - The logical OpenFlow switch number.
+*	    entryPtr - bucket reference parameters.
+*
+* OUTPUTS:
+*       entryPtr   - the wanted bucket index. 
+* RETURNS:
+*       FPA_OK                    - on success.
+*       FPA_NOT_FOUND             - entry not found
+*       FPA_BAD_PARAM             - wrong parameters
+*
+* COMMENTS:
+*
+*******************************************************************************/
+FPA_STATUS fpaLibGroupEntryBucketGetIndexByEntry
+(
+    IN    uint32_t   			switchId,
+    INOUT FPA_GROUP_BUCKET_ENTRY_STC   *entryPtr
+);
+
 /*******************************************************************************
 * fpaLibPortPropertiesGet
 *
@@ -747,6 +785,7 @@ FPA_STATUS fpaLibGroupEntryBucketGet
 * INPUTS:
 *       switchId    - The logical OpenFlow switch number.
 *       portNum     - The port
+*       propertiesPtr - requested flags.
 *
 * OUTPUTS:
 *       propertiesPtr   - (pointer to) the generic port properties structure.
@@ -1360,7 +1399,7 @@ FPA_STATUS fpaLibSwitchAgingTimeoutGet
 * fpaLibBridgingAuMsgGet
 *
 * DESCRIPTION:
-*       Get New Address event – every call returns one event at most
+*       Get New Address event every call returns one event at most
 *
 * INPUTS:
 *   	non_blocking     - Indicates if the functions is blocking or not.
@@ -1385,10 +1424,57 @@ FPA_STATUS fpaLibBridgingAuMsgGet
 	OUT 	FPA_EVENT_ADDRESS_MSG_STC *msg_ptr
 );
 
-#ifndef _FPA_STD_
-int fpa_main(int argc, char *argv[], char *envp[]);
-#endif
+/*******************************************************************************
+* fpaLibInit
+*
+* DESCRIPTION:
+*      Initialize packet processor and FPA library
+*
+* INPUTS:
+*
+* OUTPUTS:
+*
+*
+* RETURNS:
+*      FPA_OK                   - on success.
+*      FPA_ERROR             - on initialization error
+*
+* COMMENTS:
+*
+*******************************************************************************/
+FPA_STATUS fpaLibInit
+(
+    void
+);
 
+
+
+/*******************************************************************************
+* fpaLibDevicePortsParametes
+*
+* DESCRIPTION:
+*      Set the device ports mapping configuration
+*
+* INPUTS:
+*
+* OUTPUTS:
+*
+*
+* RETURNS:
+*      FPA_OK                - on success.
+*      FPA_ERROR             - on initialization error
+*
+* COMMENTS:
+*
+*******************************************************************************/
+
+FPA_STATUS fpaLibDevicePortsParametes
+(
+	IN	uint32_t			portsMapArraySize,
+	IN 	uint32_t			portsConfigArraySize,
+	IN	FPA_PORT_MAP_STC	*portsMapArray,
+	IN	FPA_PORT_CONFIG_STC	*portsConfigArray
+);
 
 #ifdef __cplusplus
 }

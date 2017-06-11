@@ -56,7 +56,8 @@ extern "C" {
 #define FPA_FLOW_VLAN_MASK_TAG      0x1FFF
 #define FPA_FLOW_VLAN_MASK_UNTAG    0x1000
 #define FPA_FLOW_VLAN_IGNORE_VAL    0xFFFF
-
+#define FPA_FLOW_INVALID_VAL        0xFFFFFFFF
+ 
 #define FPA_MAC_ADDRESS_SIZE    6
 #define FPA_IPV6_ADDRESS_SIZE   16
 
@@ -71,6 +72,7 @@ typedef struct
 #define FPA_MAC_ADDRESS_IS_BC(macAddr)  ((macAddr.addr[0] == 0xFF) && (macAddr.addr[1] == 0xFF) && (macAddr.addr[2] == 0xFF) && (macAddr.addr[3] == 0xFF) && (macAddr.addr[4] == 0xFF) && (macAddr.addr[5] == 0xFF))
 #define FPA_MAC_ADDRESS_IS_EMPTY(macAddr)  ((macAddr.addr[0] == 0) && (macAddr.addr[1] == 0) && (macAddr.addr[2] == 0) && (macAddr.addr[3] == 0) && (macAddr.addr[4] == 0) && (macAddr.addr[5] == 0))
 #define FPA_MAC_ADDRESS_IS_INVALID(macAddr) (FPA_MAC_ADDRESS_IS_BC(macAddr) || FPA_MAC_ADDRESS_IS_EMPTY(macAddr)) 
+
 /*
  * Typedef: enum FPA_STATUS
  *
@@ -124,14 +126,16 @@ typedef enum
  * Description: Enumeration of FPA flow table entry type.
  *
  * Enumerations:
- *  FPA_FLOW_TABLE_TYPE_VLAN_E        -   VLAN filtering and assignment. 
- *  FPA_FLOW_TABLE_TYPE_TERMINATION_E -   MAC2ME termination.
- *  FPA_FLOW_TABLE_TYPE_PCL0_E        -   TCAM table pcl0.
- *  FPA_FLOW_TABLE_TYPE_PCL1_E        -   TCAM table pcl0.
- *  FPA_FLOW_TABLE_TYPE_PCL2_E        -   TCAM table pcl0.
- *  FPA_FLOW_TABLE_TYPE_L2_BRIDGING_E -   FDB L2 bridging forwarding table entry.
- *  FPA_FLOW_TABLE_TYPE_L3_UNICAST_E  -   L3 unicast routing table entry.
- *  FPA_FLOW_TABLE_TYPE_EPL_E         -   egress policy table entry.
+ *  FPA_FLOW_TABLE_TYPE_VLAN_E        		-   VLAN filtering and assignment. 
+ *  FPA_FLOW_TABLE_TYPE_TERMINATION_E 		-   MAC2ME termination.
+ *  FPA_FLOW_TABLE_TYPE_PCL0_E        		-   TCAM table pcl0.
+ *  FPA_FLOW_TABLE_TYPE_PCL1_E        		-   TCAM table pcl0.
+ *  FPA_FLOW_TABLE_TYPE_PCL2_E        		-   TCAM table pcl0.
+ *  FPA_FLOW_TABLE_TYPE_L2_BRIDGING_E 		-   FDB L2 bridging forwarding table entry.
+ *  FPA_FLOW_TABLE_TYPE_L2_FDB_E            -   All mac address in fdb table (static+dynamic)
+ *  FPA_FLOW_TABLE_TYPE_L3_UNICAST_E  		-   L3 IPv4 unicast routing table entry.
+ *  FPA_FLOW_TABLE_TYPE_L3_UNICAST_IPV6_E  	-   L3 IPv6 unicast routing table entry.
+ *  FPA_FLOW_TABLE_TYPE_EPL_E         		-   egress policy table entry.
  *
  * Comments:
  *         None.
@@ -144,8 +148,11 @@ typedef enum
     FPA_FLOW_TABLE_TYPE_PCL0_E,
     FPA_FLOW_TABLE_TYPE_PCL1_E,
     FPA_FLOW_TABLE_TYPE_PCL2_E,
+    FPA_FLOW_TABLE_TYPE_VR_ID_E,
     FPA_FLOW_TABLE_TYPE_L2_BRIDGING_E,
-    FPA_FLOW_TABLE_TYPE_L3_UNICAST_E,
+    FPA_FLOW_TABLE_TYPE_L2_FDB_E,
+    FPA_FLOW_TABLE_TYPE_L3_UNICAST_E, /* IPv4 table */
+	FPA_FLOW_TABLE_TYPE_L3_UNICAST_IPV6_E,
     FPA_FLOW_TABLE_TYPE_EPCL_E,
     FPA_FLOW_TABLE_TYPE_LAST_E = FPA_FLOW_TABLE_TYPE_EPCL_E,
     FPA_FLOW_TABLE_TYPE_MAX = 0xFFFFFFFF
@@ -164,7 +171,7 @@ typedef enum
 #define FPA_FLOW_TABLE_PCL_ACTION_CLEAR_ACTION_FLAG    (1 << 7)
 #define FPA_FLOW_TABLE_PCL_ACTION_GOTO_FLAG            (1 << 8)
 #define FPA_FLOW_TABLE_PCL_ACTION_VLAN_ID_FLAG         (1 << 9)
-
+#define FPA_FLOW_TABLE_PCL_ACTION_VR_ID_FLAG           (1 << 10)
 
 #define FPA_FLOW_TABLE_METADATA_DATA_BIT               (0xFFF)
 #define FPA_FLOW_TABLE_METADATA_MAC2ME_BIT             (1 << 12)
@@ -194,6 +201,33 @@ typedef struct
   uint32_t   gotoTableNo;   /* the next table in the lookup pipeline or 0 to drop */
 
 } FPA_FLOW_TABLE_ENTRY_VLAN_STC;
+
+/*
+ * typedef: struct FPA_FLOW_TABLE_ENTRY_VR_ID_STC
+ *
+ * Description: add virtual router.
+ *              only one of the critria inPort or vlanId can be valid
+ *
+ * Fields:
+ *      inPort   - Ingress port. Numerical representation of incoming port, starting at 1. 
+ *                 This may be a physical or switch-dened logical port..
+ *
+ */
+typedef struct 
+{
+  /* Match Fields  */
+  uint32_t    inPort;
+  uint32_t    inPortMask;
+  uint16_t    vlanId;       /* VLAN-ID field. The CFI bit indicates a valid one. */
+  uint16_t    vlanIdMask;   
+
+  /* Write Actions Instruction */
+  uint16_t    assignVrId;   /* Assign VR-ID metadata if it current value is 0. */
+
+  /* GOTO instruction */
+  uint32_t   gotoTableNo;   /* the next table in the lookup pipeline */
+
+} FPA_FLOW_TABLE_ENTRY_VR_ID_STC;
 
 /*
  * typedef: struct FPA_FLOW_TABLE_MATCH_FIELDS_TERMINATION_STC
@@ -289,12 +323,14 @@ typedef struct
 /*
  * typedef: struct FPA_FLOW_TABLE_ENTRY_L3_UNICAST_STC
  *
- * Description: 
+ * Description: IPv4 and IPv6 unicast routing
  *
  * Fields:
- *      etherType   - must be 0x0800
- *      dstIp4      - must be IPv4 unicast address
- *      groupId     - must be L3 Unicast category
+ *      etherType   - must be 0x0800 or 0x86dd
+ *      vrfId       - VRF-ID, default is 0
+ *      dstIp4      - IPv4 unicast address
+ *      dstIp6      - IPv6 unicast address
+ *      groupId     - must be L3 Unicast category group
  *      gotoTableNo - the next table in the lookup pipeline or 0 to drop 
  *
  */
@@ -303,10 +339,12 @@ typedef struct fpaUnicastRoutingFlowEntry_s
   /* Match Fields */
   struct
   {
-      uint16_t    etherType;
-      uint16_t    vrfId;
-      in_addr_t   dstIp4;
-      in_addr_t   dstIp4Mask;
+      uint16_t          etherType;
+      uint16_t          vrfId;
+      in_addr_t         dstIp4;
+      in_addr_t         dstIp4Mask;
+      struct in6_addr   dstIp6;
+      struct in6_addr   dstIp6Mask;      
   } match;
  
   /* Apply-Action(s) instruction */
@@ -453,10 +491,11 @@ typedef struct
 
   /* Write-Actions instruction */
   uint32_t    groupId;      
-  uint8_t     queueId;          /* data for SET_QUEUE action */
+  uint8_t     queueId;          /* data for SET_QUEUE action, exclusive with vrId */
   uint8_t     vlanPcp;          /* data for SET_VLAN_PCP action */
   uint8_t     dscp;             /* data for SET_IP_DSCP action */
   uint16_t    vlanId;          /* data for SET_VLAN_ID action */
+  uint16_t    vrId;             /* VR-ID metadata, exclusive with groupId */
 
   /* Write-Metadata instruction */
   uint64_t    metadataValue;    /* only MAC2ME bit valid */
@@ -469,6 +508,8 @@ typedef struct
   uint32_t   gotoTableNo; 
 
 } FPA_FLOW_TABLE_ENTRY_ACL_POLICY_STC;
+
+
 
 /******************************************************************************* 
                             Control Packets flow
@@ -492,6 +533,10 @@ typedef enum
   FPA_CONTROL_PKTS_TYPE_IPV6_MLD_ICMP_MESSAGES_E,
   FPA_CONTROL_PKTS_TYPE_UDP_BROADCAST_CTRL_E,
   FPA_CONTROL_PKTS_TYPE_ARP_REQUEST_MESSAGES_E,
+  FPA_CONTROL_PKTS_TYPE_ARP_RESPONSE_MESSAGES_E,
+  FPA_CONTROL_PKTS_TYPE_IPV6_NEIGHBOR_SOLICITATION_E,
+  FPA_CONTROL_PKTS_TYPE_IPV4_LINK_LOCAL_E,
+  FPA_CONTROL_PKTS_TYPE_IPV6_LINK_LOCAL_E,
   FPA_CONTROL_PKTS_TYPE_RIPV1_CTRL_MESSAGES_E,
   FPA_CONTROL_PKTS_ENTRY_TYPE_LAST = FPA_CONTROL_PKTS_TYPE_RIPV1_CTRL_MESSAGES_E,
   FPA_CONTROL_PKTS_ENTRY_TYPE_MAX = 0xFFFFFFFF
@@ -523,9 +568,15 @@ typedef struct
 
   uint32_t    dstL4Port;
   uint32_t    dstL4PortMask;
-
+  
   uint8_t     icmpV6Type; 
-  uint8_t     icmpV6TypeMask;  
+  uint8_t     icmpV6TypeMask;
+  
+  struct in_addr    dstIpv4;
+  struct in_addr    dstIpv4Mask;
+
+  struct in6_addr   dstIpv6;
+  struct in6_addr   dstIpv6Mask;
 
 } FPA_FLOW_TABLE_MATCH_FIELDS_CONTROL_PKTS_STC;
 
@@ -591,6 +642,7 @@ typedef struct
       FPA_FLOW_TABLE_ENTRY_VLAN_STC         vlan;
       FPA_FLOW_TABLE_ENTRY_TERMINATION_STC  termination;
       FPA_FLOW_TABLE_ENTRY_L2_BRIDGING_STC  l2_bridging;
+      FPA_FLOW_TABLE_ENTRY_VR_ID_STC        vr_id;
       FPA_FLOW_TABLE_ENTRY_L3_UNICAST_STC   l3_unicast;
       FPA_FLOW_TABLE_ENTRY_ACL_POLICY_STC   acl_policy;
   } data;
@@ -655,24 +707,28 @@ typedef struct
  *      FPA_GROUP_L2_INTERFACE_E - Group type L2 Interface
  *      FPA_GROUP_L2_MULTICAST_E - Group type L2 Multicast
  *      FPA_GROUP_L2_FLOOD_E     - Group type L2 Flood 
- *      FPA_GROUP_L2_REWRITE_E   - Group type L2 Rewrite 
+ *      FPA_GROUP_L2_REWRITE_E   - Group type L2 Rewrite
  *      FPA_GROUP_L3_UNICAST_E   - Group type L3 Unicast
- *      FPA_GROUP_L3_INTERFACE_E - Group type L3 Interface 
+ *      FPA_GROUP_L3_ECMP_E      - Group type L3 ECMP
+ *      FPA_GROUP_L3_INTERFACE_E - Group type L3 Interface
+ *      FPA_GROUP_L2_LAG_E       - Group type L2 LAG
  *
  * Comments:
  *         None.
  */
 typedef enum
 { 
-	FPA_GROUP_L2_INTERFACE_E,
-	FPA_GROUP_L2_MULTICAST_E,  
-	FPA_GROUP_L2_FLOOD_E, 
-	FPA_GROUP_L2_REWRITE_E, 
-	FPA_GROUP_L3_UNICAST_E,
-	FPA_GROUP_L3_INTERFACE_E, 
+    FPA_GROUP_L2_INTERFACE_E,
+    FPA_GROUP_L2_MULTICAST_E,  
+    FPA_GROUP_L2_FLOOD_E, 
+    FPA_GROUP_L2_REWRITE_E,    
+    FPA_GROUP_L3_UNICAST_E,
+    FPA_GROUP_L3_ECMP_E,
+    FPA_GROUP_L3_INTERFACE_E, 
+    FPA_GROUP_L2_LAG_E, 
     FPA_GROUP_POE_E          = 15, 
-	FPA_GROUP_LAST_E,
-	FPA_GROUP_TYPE_MAX_E     = 0xFFFFFFFF
+    FPA_GROUP_LAST_E,
+    FPA_GROUP_TYPE_MAX_E     = 0xFFFFFFFF
 } FPA_GROUP_TABLE_ENTRY_TYPE_ENT;
 
 /*
@@ -703,6 +759,24 @@ typedef struct
     uint32_t                          index;          /* [27: 0]  */
 } FPA_GROUP_ENTRY_IDENTIFIER_STC;
 
+/*
+ * typedef: enum FPA_GROUP_ALGORITHM_ENT
+ *
+ * Description: Enumeration of FPA group algorithm.
+ *
+ * Enumerations:
+ *      FPA_GROUP_ALGORITHM_HASH_ECMP_E - CRC hash value based
+ *      FPA_GROUP_ALGORITHM_INDX_ECMP_E - pseudo-random index
+ *
+ * Comments:
+ *         None.
+ */
+typedef enum
+{ 
+    FPA_GROUP_ALGORITHM_HASH_ECMP_E, 
+    FPA_GROUP_ALGORITHM_INDX_ECMP_E,
+    FPA_GROUP_ALGORITHM_LAST_E = FPA_GROUP_ALGORITHM_INDX_ECMP_E,
+} FPA_GROUP_ALGORITHM_ENT;
 
 /*
  * typedef: struct FPA_GROUP_TABLE_ENTRY_STC
@@ -711,13 +785,21 @@ typedef struct
  *
  * Fields:
  *      groupIdentifier    - 32 bit opaque group identifier.
- *      groupTypeSemantics - one of ofp_group_type, as OFPGT_ALL, etc.
+ *	    groupTypeSemantics - the ofp group type OFPGT_ALL =  All group. 
+ *                                        OFPGT_SELECT =  Select group (ecmp). 
+ *                                        OFPGT_INDIRECT =  Indirect group. 
+ *                                        OFPGT_FF =  Fast failover group.
+ *      selectionAlgorithm - load balancing mechanism
+ *                           FPA_GROUP_ALGORITHM_HASH_ECMP_E  CRC hash value based
+ *                           FPA_GROUP_ALGORITHM_INDX_ECMP_E  pseudo-random index
+ *                           0 - default 
  *
  */
 typedef struct
 {
     uint32_t    groupIdentifier;
     uint32_t    groupTypeSemantics;
+    uint32_t    selectionAlgorithm; /* 0 - default */
 } FPA_GROUP_TABLE_ENTRY_STC;
 
 
@@ -781,12 +863,12 @@ typedef struct
 } FPA_GROUP_BUCKET_L2_INTERFACE_STC;
 
 /*
- * typedef: struct FPA_GROUP_BUCKET_COUNTERS_STC
+ * typedef: struct FPA_GROUP_BUCKET_L2_REFERENCE_STC
  *
  * Description: Represents IEEE 801.Q compliant L2_INTERFACE group bucket structure.
  *
  * Fields:
- *      referenceGroupId - specify another group, foe example in a multicast group
+ *      referenceGroupId - specify another group, for example in a multicast group or ecmp group
  *
  */
 typedef struct 
@@ -812,9 +894,10 @@ typedef struct
     FPA_MAC_ADDRESS_STC   srcMac;
 } FPA_GROUP_BUCKET_L3_INTERFACE_STC;
 
+
 typedef struct 
 {
-  uint32_t         		  refGroupId;  /* reference L2 interface */
+  uint32_t                refGroupId;  /* reference L2 interface */
   uint32_t              vlanId;
   uint32_t              mtu;
   FPA_MAC_ADDRESS_STC   srcMac;
@@ -823,8 +906,8 @@ typedef struct
 
 typedef struct
 {
-  uint32_t         		  refGroupId;  /* reference L2 interface */
-  uint32_t         		  vlanId;
+  uint32_t                refGroupId;  /* reference L2 interface */
+  uint32_t                vlanId;
   FPA_MAC_ADDRESS_STC   srcMac;
   FPA_MAC_ADDRESS_STC   dstMac;
 } FPA_GROUP_BUCKET_L2_REWRITE_STC;
@@ -837,6 +920,7 @@ typedef struct
  *
  * Enumerations:
  *      FPA_GROUP_BUCKET_L2_INTERFACE_E - Group bucket type L2 Interface
+ *      FPA_GROUP_BUCKET_L2_REFERENCE_E - bucket used for group reference(l2 multicast or l3 ecmp)
  *
  * Comments:
  *         None.
@@ -845,7 +929,7 @@ typedef enum
 { 
     FPA_GROUP_BUCKET_L2_INTERFACE_E, 
     FPA_GROUP_BUCKET_L2_REFERENCE_E,
-    FPA_GROUP_BUCKET_L2_REWRITE_E,
+    FPA_GROUP_BUCKET_L2_REWRITE_E,    
     FPA_GROUP_BUCKET_L3_UNICAST_E,
     FPA_GROUP_BUCKET_L3_INTERFACE_E,
     FPA_GROUP_BUCKET_TYPE_LAST_E,
@@ -856,7 +940,7 @@ typedef enum
  * use. */
 enum fpaGroupType {
     FPA_GROUP_ALL      = 0, /* All (multicast/broadcast) group.  */
-    FPA_GROUP_SELECT   = 1, /* Select group. */
+    FPA_GROUP_SELECT   = 1, /* Select group. (ecmp)*/
     FPA_GROUP_INDIRECT = 2, /* Indirect group. */
     FPA_GROUP_FF       = 3, /* Fast failover group. */
 };
@@ -882,7 +966,7 @@ typedef struct
   {
     FPA_GROUP_BUCKET_L2_INTERFACE_STC  l2Interface;
     FPA_GROUP_BUCKET_L2_REFERENCE_STC  l2Reference;
-    FPA_GROUP_BUCKET_L2_REWRITE_STC    l2Rewrite;
+    FPA_GROUP_BUCKET_L2_REWRITE_STC    l2Rewrite;    
     FPA_GROUP_BUCKET_L3_INTERFACE_STC  l3Interface;
     FPA_GROUP_BUCKET_L3_UNICAST_STC    l3Unicast;
   } data;
@@ -1135,119 +1219,124 @@ typedef struct
  *      in the switch, its value is the maximum field value (unsigned value -1).
  *
  * Fields:
- *      goodOctetsSent - Sum of lengths of all good Ethernet frames sent from
- *                       this MAC. This does not include IEEE 802.3 Flow Control
- *                       frames or packets dropped due to excessive collision or
- *                       packets with Tx Error Event.         
- *      unicastFrameSent - Number of Ethernet Unicast frames sent from this MAC.
- *                         This does not include: IEEE 802.3 Flow Control frames,
- *                         collided packets, packets dropped due to excessive
- *                         collision or packets with Tx Error Event.       
- *      multicastFramesSent - Number of good frames sent that had a Multicast
- *                            destination MAC Address. This does not include:
- *                            IEEE 802.3 Flow Control frames, collided packets,
- *                            packets dropped due to excessive collision or
- *                            packets with Tx Error Event.     
- *      broadcastFramesSent - Number of good frames sent that had a Broadcast
- *                            destination MAC Address. This does not include:
- *                            IEEE 802.3 Flow Control frames, collided packets,
- *                            packets dropped due to excessive collision or
- *                            packets with Tx Error Event.
- *      collisions - Number of collision events seen by the MAC.              
- *      excessiveCollision - Number of frames dropped in the transmit MAC due to
- *                           excessive collision condition. This bit is
- *                           applicable for Half-duplex mode only.     
- *      lateCollision - Number of late collisions seen by the MAC. 
- *      sentMultiple - Valid Frame transmitted on half-duplex link that
- *                     encountered more then one collision.
- *      goodOctetsReceived - Sum of lengths of all good Ethernet frames received,
- *                           for example, frames that are not bad frames or MAC
- *                           Control packets. This sum does not include IEEE
- *                           802.3x Pause messages, but does include bridge
- *                           control packets such as LCAP and BPDU.
- *      badOctetsReceived - Sum of lengths of all bad Ethernet frames received.
- *      goodUnicastFramesReceived - Number of Ethernet Unicast frames received
- *                                  that are not bad Ethernet frames or MAC
- *                                  Control packets. Note that this number does
- *                                  include Bridge Control packets such as LCAP
- *                                  and BPDU.
- *      multicastFramesReceived - Number of good frames received that had a
- *                                Multicast destination MAC Address. NOTE: This
- *                                does not include IEEE 802.3 Flow Control messages,
- *                                as they are considered MAC Control packets.
- *      broadcastFramesReceived - Number of good frames received that had a
- *                                Broadcast destination MAC Address.
- *      badCRC - Number CRC error events.
- *      rxErrors - Number of Rx Error events seen by the receive side of the MAC.
- *      oversizePkts - Number of oversize packets received.
- *      undersizePkts - Number of undersize packets received.
- *      fragments - Number of fragments received.
- *      jabberPkts - Number of jabber packets received.
- *      rxFrames64Octets - The number of received good and bad frames that are
- *                         64 bytes in size.
- *                         NOTE: This does not include MAC Control Frames. 
- *      rxFrames65to127Octets - The number of received good and bad frames whose
- *                              size is between 65-127 bytes.
- *                              Note: This does not include MAC Control Frames.
- *      rxFrames128to255Octets - The number of received good and bad frames whose
- *                               size is between 128-255 bytes.
- *                               Note: This does not include MAC Control Frames.
- *      rxFrames256to511Octets - The number of received good and bad frames whose
- *                               size is between 256-511 bytes.
- *                               Note: This does not include MAC Control Frames.
- *      rxFrames512to1023Octets - The number of received good and bad frames whose
- *                                size is between 512-1023 bytes.
- *                                Note: This does not include MAC Control Frames.
- *      rxFrames1024toMaxOctets - The number of received good and bad frames that
- *                                are more than 1023 bytes in size.
- *                                NOTE: This does not include MAC Control Frames.
- *      rxFrames1024to1518Octets - The number of received good and bad frames
- *                                 whose size is between 1024-1518 bytes.
- *                                 NOTE: This does not include MAC Control Frames.                               
- *      receiveFIFOoverrun - Number of instances that the port was unable to
- *                           receive packets due to insufficient bandwidth to one
- *                           of the packet processor internal resources, such
- *                           as the DRAM or buffer allocation.
- *      FCReceived - Number of IEEE 802.3x Flow Control packets received.
- *      FCSent - Number of Flow Control frames sent.
+ *      goodOctetsReceived - The sum of lengths of all good Ethernet frames
+ *                           received, namely, frames that are not bad frames or
+ *                           MAC Control packets.
+ *                           This sum does not include 802.3x pause messages,
+ *                           but does include bridge control packets like LCAP
+ *                           and BPDU.    
+ *    badOctetsReceived - Sum of the lengths of all bad Ethernet frames received.     
+ *    crcErrorsSent - Invalid frame transmitted when one of the following occurs:
+ *                    1. A frame with a bad CRC was read from the memory.
+ *                    2. Underrun occurs.         
+ *    goodUnicastFramesReceived - Number of Ethernet Unicast frames received
+ *                                that are not bad Ethernet frames or MAC
+ *                                Control packets.
+ *                                This number includes Bridge Control packets
+ *                                such as LACP and BPDU.
+ *    reserved4_sentDeferred - reserved.
+ *    broadcastFramesReceived - Number of good frames received that had a
+ *                              Broadcast destination MAC Address.
+ *    multicastFramesReceived - The number of good frames received that had a
+ *                              Multicast destination MAC Address.
+ *                              This does NOT include 802.3 Flow Control
+ *                              messages, as they are considered MAC Control
+ *                              packets.
+ *    rxFrames64Octets - The number of received and transmitted good and bad
+ *                       frames that are 64 bytes in size.
+ *                       This does not include MAC Control Frames.      
+ *    rxFrames65to127Octets - The number of received and transmitted good and
+ *                            bad frames that are 65 to 127 bytes in size.
+ *                            This does not include MAC Control Frames.  
+ *    rxFrames128to255Octets - The number of received and transmitted good and
+ *                             bad frames that are 128 to 255 bytes in size.
+ *                             This does not include MAC Control Frames. 
+ *    rxFrames256to511Octets - The number of received and transmitted good and
+ *                             bad frames that are 256 to 511 bytes in size.
+ *                             This does not include MAC Control Frames.
+ *    rxFrames512to1023Octets - The number of received and transmitted good and
+ *                              bad frames that are 512 to 1023 bytes in size.
+ *                              This does not include MAC Control Frames.
+ *    rxFrames1024toMaxOctets - The number of received and transmitted of good and
+ *                              bad frames that are more than 1023 bytes in size.
+ *                              This does not include MAC Control Frames.
+ *    rxFrames1024to1518Octet - The number of received and transmitted good and
+ *                              bad frames that are 1024 to 1518 bytes in size.
+ *                              This does not include MAC Control Frames.
+ *    rxFrames1519toMaxOctets - The number of received and transmitted of good and
+ *                              bad frames that are more than 1519 bytes in size.
+ *                              This does not include MAC Control Frames.
+ *    goodOctetsSent - The sum of lengths of all good Ethernet frames sent from
+ *                     this MAC.
+ *                     This does not include 802.3 Flow Control frames or
+ *                     packets with Transmit Error Event counted in CRCErrorSent.        
+ *    unicastFrameSent - Number of good frames sent that had a Unicast
+ *                       destination MAC Address.      
+ *    reserved15 - reserved.            
+ *    multicastFramesSent - Number of good frames sent that had a Multicast
+ *                          destination MAC Address.
+ *                          This does not include IEEE 802.3 Flow Control frames.
+ *    broadcastFramesSent - Number of good frames sent that had a Broadcast
+ *                          destination MAC Address.
+ *                          This does not include IEEE 802.3 Flow Control frames.                             
+ *    reserved18 - reserved.            
+ *    FCSent - Number of 802.x3 Flow Control frames sent.                
+ *    receiveFIFOoverrun - Number of instances that the port was unable to
+ *                         receive packets due to insufficient bandwidth to one
+ *                         of the packet processor internal resources.
+ *                         This counter counts overruns on the Rx FIFO.    
+ *    undersizePktsRecieved - Number of undersized packets received. 
+ *    fragmentsRecieved - Number of fragments received.     
+ *    oversizePktsRecieved - Number of oversize packets received.  
+ *    rxJabberPksRecieved - Number of jabber packets received.   
+ *    rxErrorFrameReceived - Number of Rx Error events seen by the receive side
+ *                           of the MAC.  
+ *    badCRC - Number of CRC error events.                
+ *    collisions - If working in Half Duplex, this is the transmit with
+ *                 collision counter.            
+ *    lateCollision - If working in Half Duplex, this is the transmit with late
+ *                    collision counter.         
  * 
  */
 typedef struct 
 {
-    uint64_t	goodOctetsSent;
-    uint64_t	unicastFrameSent;
-    uint64_t	multicastFramesSent;
-    uint64_t	broadcastFramesSent;
-    uint64_t	collisions;
-    uint64_t	excessiveCollision;
-    uint64_t	lateCollision;
-    uint64_t	sentMultiple;
-		
-    uint64_t	goodOctetsReceived;
-    uint64_t	badOctetsReceived;
-    uint64_t	goodUnicastFramesReceived;
-    uint64_t	multicastFramesReceived;
-    uint64_t	broadcastFramesReceived;
-		
-    uint64_t	badCRC;
-    uint64_t  rxErrors;
-    uint64_t	oversizePkts;
-    uint64_t	undersizePkts;
-    uint64_t	fragments;
-    uint64_t  jabberPkts;
-		
-    uint64_t	rxFrames64Octets;
-    uint64_t	rxFrames65to127Octets;
-    uint64_t	rxFrames128to255Octets;
-    uint64_t	rxFrames256to511Octets;
-    uint64_t	rxFrames512to1023Octets;
-    uint64_t	rxFrames1024toMaxOctets;
-    uint64_t	rxFrames1024to1518Octets;
-		
-    uint64_t	receiveFIFOoverrun;
-    uint64_t	FCReceived;
-    uint64_t	FCSent;
+    uint64_t    goodOctetsReceived;
+    uint64_t    badOctetsReceived;
+    uint64_t    crcErrorsSent;
+    uint64_t    goodUnicastFramesReceived;
+    uint64_t    reserved4_sentDeferred;
+    uint64_t    broadcastFramesReceived;
+    uint64_t    multicastFramesReceived;
 
+    uint64_t    rxFrames64Octets;
+    uint64_t    rxFrames65to127Octets;
+    uint64_t    rxFrames128to255Octets;
+    uint64_t    rxFrames256to511Octets;
+    uint64_t    rxFrames512to1023Octets;
+    uint64_t    rxFrames1024toMaxOctets;
+    uint64_t    rxFrames1024to1518Octets;
+    uint64_t    rxFrames1519toMaxOctets; 
+
+    uint64_t    goodOctetsSent;
+    uint64_t    unicastFrameSent;
+    uint64_t    reserved15;
+    uint64_t    multicastFramesSent;
+    uint64_t    broadcastFramesSent;
+
+    uint64_t    reserved18;
+
+    uint64_t    FCSent;
+    uint64_t    FCReceived;
+    uint64_t    receiveFIFOoverrun;
+    uint64_t    undersizePktsRecieved;
+    uint64_t    fragmentsRecieved;
+    uint64_t    oversizePktsRecieved;
+    uint64_t    rxJabberPksRecieved;
+    uint64_t    rxErrorFrameReceived;
+    uint64_t    badCRC;
+    uint64_t    collisions;
+    uint64_t    lateCollision;
+        
 } FPA_PORT_COUNTERS_EXT_STC;
 
 typedef uint32_t FPA_FLOW_TABLE_ID_t;
@@ -1278,6 +1367,8 @@ typedef struct
   uint32_t                  pktDataSize;
 
   uint8_t                   *pktDataPtr;
+
+  uint16_t					vid;
 
 } FPA_PACKET_BUFFER_STC;
 
@@ -1406,7 +1497,8 @@ typedef struct
   uint32_t              memory_mode;  /*0- disabled, 1- use all memories, 2- use memory 1+2, 3- use memory 1 only*/    
   uint32_t              ipcl_size;      
   uint32_t              epcl_size;      
-
+  uint32_t			    num_entries_ingress_stage0;
+  uint32_t              num_entries_ingress_stage1;
 } FPA_LIB_INFO_METER_STC;
 
 typedef struct 
@@ -1459,12 +1551,22 @@ typedef enum {
     FPA_EVENT_ADDRESS_UPDATE_MAX_E = 0xFFFFFFFF
 } FPA_EVENT_ADDRESS_UPDATE_TYPE_ENT;
 
+typedef enum {
+    FPA_INTERFACE_PORT_E = 0,
+    FPA_INTERFACE_TRUNK_E,
+    FPA_INTERFACE_VIDX_E,
+    FPA_INTERFACE_VID_E,
+    FPA_INTERFACE_DEVICE_E,
+    FPA_INTERFACE_FABRIC_VIDX_E,
+    FPA_INTERFACE_INDEX_E
+}FPA_INTERFACE_TYPE_ENT;
 
 typedef struct 
 {  
     uint16_t                            vid;
     FPA_MAC_ADDRESS_STC                 address;
-    uint32_t                            portNum;
+    FPA_INTERFACE_TYPE_ENT				interfaceType;
+    uint32_t							interfaceNum;
     FPA_EVENT_ADDRESS_UPDATE_TYPE_ENT   type;
 } FPA_EVENT_ADDRESS_MSG_STC;
 
@@ -1481,6 +1583,122 @@ typedef struct
 {
     FPA_PACKET_TO_CONTROLLER_CB_FUN toController;
 } FPA_NOTIFICATIONS_CB_STC;
+
+
+
+typedef enum
+ {
+     FPA_PORT_TYPE_ETHERNET_MAC_E = 0
+    ,FPA_PORT_TYPE_CPU_SDMA_E
+    ,FPA_PORT_TYPE_ILKN_CHANNEL_E
+    ,FPA_PORT_TYPE_REMOTE_PHYSICAL_PORT_E
+    ,FPA_PORT_TYPE_MAX_E
+    ,FPA_PORT_TYPE_INVALID_E = ~0
+}FPA_PORT_TYPE_ENT;
+
+typedef struct
+{
+    uint32_t			physicalPortNumber;
+    FPA_PORT_TYPE_ENT   mappingType;
+    uint32_t            portGroup;
+    uint32_t            interfaceNum;
+    uint32_t            txqPortNumber;
+    bool		        tmEnable;
+    uint32_t            tmPortInd;
+}FPA_PORT_MAP_STC;
+
+
+typedef enum
+{
+     FPA_PHY_SMI_INTERFACE_0_E = 0
+    ,FPA_PHY_SMI_INTERFACE_1_E
+    ,FPA_PHY_SMI_INTERFACE_2_E
+    ,FPA_PHY_SMI_INTERFACE_3_E
+    ,FPA_PHY_SMI_INTERFACE_MAX_E
+    ,FPA_PHY_SMI_INTERFACE_INVALID_E = (~0)
+} FPA_PHY_SMI_INTERFACE_ENT;
+
+typedef enum
+{
+    FPA_PHY_XSMI_INTERFACE_0_E,
+    FPA_PHY_XSMI_INTERFACE_1_E
+} FPA_PHY_XSMI_INTERFACE_ENT;
+
+typedef enum
+{
+    FPA_PORT_INTERFACE_MODE_REDUCED_10BIT_E,   /* 0 */
+    FPA_PORT_INTERFACE_MODE_REDUCED_GMII_E,    /* 1 */
+    FPA_PORT_INTERFACE_MODE_MII_E,             /* 2 */
+    FPA_PORT_INTERFACE_MODE_SGMII_E,           /* 3 */ /* FPA_PORT_SPEED_1000_E , FPA_PORT_SPEED_2500_E   */
+    FPA_PORT_INTERFACE_MODE_XGMII_E,           /* 4 */ /* FPA_PORT_SPEED_10000_E, FPA_PORT_SPEED_12000_E, FPA_PORT_SPEED_16000_E, FPA_PORT_SPEED_20000_E, */
+    FPA_PORT_INTERFACE_MODE_MGMII_E,           /* 5 */
+    FPA_PORT_INTERFACE_MODE_1000BASE_X_E,      /* 6 */ /* FPA_PORT_SPEED_1000_E, */
+    FPA_PORT_INTERFACE_MODE_GMII_E,            /* 7 */
+    FPA_PORT_INTERFACE_MODE_MII_PHY_E,         /* 8 */
+    FPA_PORT_INTERFACE_MODE_QX_E,              /* 9 */  /* FPA_PORT_SPEED_2500_E,  FPA_PORT_SPEED_5000_E,  */
+    FPA_PORT_INTERFACE_MODE_HX_E,              /* 10 */ /* FPA_PORT_SPEED_5000_E,  FPA_PORT_SPEED_10000_E, */
+    FPA_PORT_INTERFACE_MODE_RXAUI_E,           /* 11 */ /* FPA_PORT_SPEED_10000_E  */
+    FPA_PORT_INTERFACE_MODE_100BASE_FX_E,      /* 12 */ 
+    FPA_PORT_INTERFACE_MODE_QSGMII_E,          /* 13 */ /* FPA_PORT_SPEED_1000_E, */
+    FPA_PORT_INTERFACE_MODE_XLG_E,             /* 14 */
+    FPA_PORT_INTERFACE_MODE_LOCAL_XGMII_E,     /* 15 */
+    FPA_PORT_INTERFACE_MODE_NO_SERDES_PORT_E =
+                                        FPA_PORT_INTERFACE_MODE_LOCAL_XGMII_E,
+
+    FPA_PORT_INTERFACE_MODE_KR_E,              /* 16 */ /* FPA_PORT_SPEED_10000_E, FPA_PORT_SPEED_12000_E, FPA_PORT_SPEED_20000_E, FPA_PORT_SPEED_40000_E, FPA_PORT_SPEED_100G_E, */
+    FPA_PORT_INTERFACE_MODE_HGL_E,             /* 17 */ /* FPA_PORT_SPEED_15000_E, FPA_PORT_SPEED_16000_E, FPA_PORT_SPEED_40000_E */
+    FPA_PORT_INTERFACE_MODE_CHGL_12_E,         /* 18 */ /* FPA_PORT_SPEED_100G_E , */
+    FPA_PORT_INTERFACE_MODE_ILKN12_E,          /* 19 */
+    FPA_PORT_INTERFACE_MODE_SR_LR_E,           /* 20 */ /* FPA_PORT_SPEED_5000_E, FPA_PORT_SPEED_10000_E, FPA_PORT_SPEED_12000_E, FPA_PORT_SPEED_20000_E, FPA_PORT_SPEED_40000_E */
+    FPA_PORT_INTERFACE_MODE_ILKN16_E,          /* 21 */
+    FPA_PORT_INTERFACE_MODE_ILKN24_E,          /* 22 */ 
+    FPA_PORT_INTERFACE_MODE_ILKN4_E,           /* 23 */ /* FPA_PORT_SPEED_12000_E, FPA_PORT_SPEED_20000_E, */
+    FPA_PORT_INTERFACE_MODE_ILKN8_E,           /* 24 */ /* FPA_PORT_SPEED_20000_E, FPA_PORT_SPEED_40000_E, */
+
+    FPA_PORT_INTERFACE_MODE_XHGS_E,            /* 25 */ /* FPA_PORT_SPEED_11800_E, FPA_PORT_SPEED_47200_E, */
+    FPA_PORT_INTERFACE_MODE_XHGS_SR_E,         /* 26 */ /* FPA_PORT_SPEED_11800_E, FPA_PORT_SPEED_47200_E, */
+
+    FPA_PORT_INTERFACE_MODE_NA_E               /* 27 */
+
+}FPA_PORT_INTERFACE_MODE_ENT;
+
+typedef enum
+{
+    FPA_PORT_SPEED_10_E,       /* 0 */
+    FPA_PORT_SPEED_100_E,      /* 1 */
+    FPA_PORT_SPEED_1000_E,     /* 2 */
+    FPA_PORT_SPEED_10000_E,    /* 3 */
+    FPA_PORT_SPEED_12000_E,    /* 4 */
+    FPA_PORT_SPEED_2500_E,     /* 5 */
+    FPA_PORT_SPEED_5000_E,     /* 6 */
+    FPA_PORT_SPEED_13600_E,    /* 7 */
+    FPA_PORT_SPEED_20000_E,    /* 8 */
+    FPA_PORT_SPEED_40000_E,    /* 9 */
+    FPA_PORT_SPEED_16000_E,    /* 10 */
+    FPA_PORT_SPEED_15000_E,    /* 11 */
+    FPA_PORT_SPEED_75000_E,    /* 12 */
+    FPA_PORT_SPEED_100G_E,     /* 13 */
+    FPA_PORT_SPEED_50000_E,    /* 14 */
+    FPA_PORT_SPEED_140G_E,     /* 15 */
+
+    FPA_PORT_SPEED_11800_E,    /* 16  */ /*used in combination with FPA_PORT_INTERFACE_MODE_XHGS_E or FPA_PORT_INTERFACE_MODE_XHGS_SR_E */
+    FPA_PORT_SPEED_47200_E,    /* 17  */ /*used in combination with FPA_PORT_INTERFACE_MODE_XHGS_E or FPA_PORT_INTERFACE_MODE_XHGS_SR_E */
+    FPA_PORT_SPEED_22000_E,    /* 18  */ /*used in combination with FPA_PORT_INTERFACE_MODE_XHGS_SR_E */
+    FPA_PORT_SPEED_23600_E,    /* 19  */ /*used in combination with FPA_PORT_INTERFACE_MODE_XHGS_E or FPA_PORT_INTERFACE_MODE_XHGS_SR_E */
+    FPA_PORT_SPEED_12500_E,    /* 20  */ /* used in combination with FPA_PORT_INTERFACE_MODE_XHGS_E */
+    FPA_PORT_SPEED_25000_E,    /* 21  */ /* used in combination with FPA_PORT_INTERFACE_MODE_XHGS_E */
+
+    FPA_PORT_SPEED_NA_E        /* 22 */
+
+}FPA_PORT_SPEED_ENT;
+
+typedef struct{
+    uint32_t 					portNum;
+    FPA_PORT_SPEED_ENT	 		speed;
+    FPA_PORT_INTERFACE_MODE_ENT interfaceMode;
+    FPA_PHY_SMI_INTERFACE_ENT 	smiInterface;
+	FPA_PHY_XSMI_INTERFACE_ENT 	xsmiInterface;
+}FPA_PORT_CONFIG_STC;
 
 #ifdef __cplusplus
 }
