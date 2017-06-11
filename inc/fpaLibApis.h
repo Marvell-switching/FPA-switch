@@ -276,9 +276,12 @@ FPA_STATUS fpaLibFlowEntryModify
 * COMMENTS:
 *       If a matching entry exists in the table, it must be deleted, 
 *       and if the existing entry has the FPA_SEND_FLOW_REM flag set, 
-*       it should generate a flow removed message. 
-*       If noflow entry currently residing in the requested table matches the 
-*       request, no error is recorded, and no flow table modification occurs.
+*       it should generate a 
+flow removed message. 
+*       If no
+flow entry currently residing in the requested table matches the 
+*       request, no error is recorded, and no 
+flow table modification occurs.
 *
 *******************************************************************************/
 FPA_STATUS fpaLibFlowEntryDelete
@@ -309,7 +312,8 @@ FPA_STATUS fpaLibFlowEntryDelete
 *       FPA_BAD_PARAM             - wrong parameters
 *
 * COMMENTS:
-*       If noflow entry currently residing in the table matches the 
+*       If no
+flow entry currently residing in the table matches the 
 *       cookie, no error is recorded, and no flow table modification occurs.
 *
 *******************************************************************************/
@@ -781,6 +785,7 @@ FPA_STATUS fpaLibGroupEntryBucketGetIndexByEntry
 * INPUTS:
 *       switchId    - The logical OpenFlow switch number.
 *       portNum     - The port
+*       propertiesPtr - requested flags.
 *
 * OUTPUTS:
 *       propertiesPtr   - (pointer to) the generic port properties structure.
@@ -1394,7 +1399,7 @@ FPA_STATUS fpaLibSwitchAgingTimeoutGet
 * fpaLibBridgingAuMsgGet
 *
 * DESCRIPTION:
-*       Get New Address event – every call returns one event at most
+*       Get New Address event every call returns one event at most
 *
 * INPUTS:
 *   	non_blocking     - Indicates if the functions is blocking or not.

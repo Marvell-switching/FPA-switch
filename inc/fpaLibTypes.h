@@ -1165,8 +1165,6 @@ typedef struct
     uint32_t            advertBmp;   /* Features being advertised, r/w */
     uint32_t            supportedBmp;/* Features supported by the port, read only */
     uint32_t            peerBmp;     /* Features advertised by peer, read only. */
-    uint32_t			tun_state;
-    uint32_t			tun_state_counter;
 } FPA_PORT_PROPERTIES_STC;
 
 /*
