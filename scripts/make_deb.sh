@@ -19,9 +19,9 @@ if [ ! -d "$LIB_NAME/DEBIAN" ]; then
         echo "Priority: optional"                           >> $LIB_NAME/DEBIAN/control
         echo "Architecture: amd64"                          >> $LIB_NAME/DEBIAN/control
         echo "Depends:"                                     >> $LIB_NAME/DEBIAN/control
-        echo "Maintainer: Ziv Erlichson <zive@marvell.com>" >> $LIB_NAME/DEBIAN/control
         echo "Description: Marvell FPA driver"              >> $LIB_NAME/DEBIAN/control
-        echo "based on FPA v$3"                             >> $LIB_NAME/DEBIAN/control
+        echo " based on FPA v$3"                            >> $LIB_NAME/DEBIAN/control
+        echo "Maintainer: Ziv Erlichson <zive@marvell.com>" >> $LIB_NAME/DEBIAN/control
 fi
 dpkg-deb --build $LIB_NAME/
 popd > /dev/null
