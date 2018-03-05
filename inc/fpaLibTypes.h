@@ -172,6 +172,7 @@ typedef enum
 #define FPA_FLOW_TABLE_PCL_ACTION_GOTO_FLAG            (1 << 8)
 #define FPA_FLOW_TABLE_PCL_ACTION_VLAN_ID_FLAG         (1 << 9)
 #define FPA_FLOW_TABLE_PCL_ACTION_VR_ID_FLAG           (1 << 10)
+#define FPA_FLOW_TABLE_PCL_ACTION_INVALID_FLAG         (1 << 11)
 
 #define FPA_FLOW_TABLE_METADATA_DATA_BIT               (0xFFF)
 #define FPA_FLOW_TABLE_METADATA_MAC2ME_BIT             (1 << 12)
@@ -394,13 +395,18 @@ typedef struct
  *
  * Fields:
  */
+
+
 typedef struct
 {
-  uint32_t    inPort;
-  uint32_t    inPortMask;
+  uint32_t    inPort;       /* used for ipcl when mode FPA_PCL_MODE_PORT_LIST is false */
+  uint32_t    inPortMask;   /* used for ipcl when mode FPA_PCL_MODE_PORT_LIST is false */
   
-  uint32_t    outPort;      /* used only for epcl */
-  uint32_t    outPortMask;  /* used only for epcl */
+  uint32_t    outPort;      /* used for epcl when mode FPA_EPCL_MODE_PORT_LIST is false */
+  uint32_t    outPortMask;  /* used for epcl when mode FPA_EPCL_MODE_PORT_LIST is false */
+
+  uint32_t    portBmpVal;   /* used for ipcl/epcl when mode FPA_PCL_MODE_PORT_LIST/FPA_EPCL_MODE_PORT_LIST is true */
+  uint32_t    portBmpMask;  /* used for ipcl/epcl when mode FPA_PCL_MODE_PORT_LIST/FPA_EPCL_MODE_PORT_LIST is true */
 
   FPA_MAC_ADDRESS_STC srcMac;
   FPA_MAC_ADDRESS_STC srcMacMask;
@@ -461,6 +467,18 @@ typedef struct
 
   FPA_FLOW_TABLE_MATCH_FIELDS_ACL_POLICY_IPV6_STC ipv6;
   
+  uint8_t isIp;
+  uint8_t isIpMask;
+
+  uint8_t isIpv4;
+  uint8_t isIpv4Mask;
+
+  uint8_t ipv4Fragmented;
+  uint8_t ipv4FragmentedMask;
+
+  uint8_t isIpv6;
+  uint8_t isIpv6Mask;
+
 } FPA_FLOW_TABLE_MATCH_FIELDS_ACL_POLICY_STC;
 
 /*

@@ -37,6 +37,7 @@ extern "C" {
 #include <netinet/in.h>
 
 #include "fpaLibTypes.h"
+#include "fpaProfile.h"
 
 /*******************************************************************************
 * fpaLibPreInit
@@ -252,6 +253,35 @@ FPA_STATUS fpaLibFlowEntryModify
 
 
 /*******************************************************************************
+* fpaLibFlowEntrySetValid
+*
+* DESCRIPTION:
+*       Modify valid bit.
+*      
+*
+* INPUTS:
+*       switchId      - The logical OpenFlow switch number.
+*       flowTableNo   - Flow Table number in OpenFlow pipeline
+*       flowEntryPtr  - pointer to a request flow entry
+*
+* OUTPUTS:
+*       None
+*
+* RETURNS:
+*       FPA_OK                    - on success.
+*       FPA_BAD_PARAM             - wrong parameters
+*
+* COMMENTS:
+*
+*******************************************************************************/
+FPA_STATUS fpaLibFlowEntrySetValid
+(
+    IN   uint32_t                       switchId,
+    IN   uint32_t                       flowTableNo,
+    IN   FPA_FLOW_TABLE_ENTRY_STC       *flowEntryPtr 
+);
+
+/*******************************************************************************
 * fpaLibFlowEntryDelete
 *
 * DESCRIPTION:
@@ -276,12 +306,9 @@ FPA_STATUS fpaLibFlowEntryModify
 * COMMENTS:
 *       If a matching entry exists in the table, it must be deleted, 
 *       and if the existing entry has the FPA_SEND_FLOW_REM flag set, 
-*       it should generate a 
-flow removed message. 
-*       If no
-flow entry currently residing in the requested table matches the 
-*       request, no error is recorded, and no 
-flow table modification occurs.
+*       it should generate a flow removed message. 
+*       If noflow entry currently residing in the requested table matches the 
+*       request, no error is recorded, and no flow table modification occurs.
 *
 *******************************************************************************/
 FPA_STATUS fpaLibFlowEntryDelete
@@ -312,8 +339,7 @@ FPA_STATUS fpaLibFlowEntryDelete
 *       FPA_BAD_PARAM             - wrong parameters
 *
 * COMMENTS:
-*       If no
-flow entry currently residing in the table matches the 
+*       If noflow entry currently residing in the table matches the 
 *       cookie, no error is recorded, and no flow table modification occurs.
 *
 *******************************************************************************/
@@ -451,6 +477,36 @@ FPA_STATUS fpaLibFlowEntryStatisticsGet
 
 );
 
+/*******************************************************************************
+* fpaLibFlowEntryStatisticsClear
+*
+* DESCRIPTION:
+*       Clears the per flow entry statistics.
+*
+* INPUTS:
+*       switchId      - The logical OpenFlow switch number.
+*       flowTableNo   - Flow Table number in OpenFlow pipeline
+*       flowEntryPtr  - pointer to request flow entry
+*
+* OUTPUTS:
+*       flowEntryPtr  - flow entry will be filled by flow table entry content
+*
+* RETURNS:
+*       FPA_OK                    - on success.
+*       FPA_NOT_FOUND             - entry not found
+*       FPA_BAD_PARAM             - wrong parameters
+*
+* COMMENTS:
+*       The given coockie should be written into flow entry coockie field
+*
+*******************************************************************************/
+FPA_STATUS fpaLibFlowEntryStatisticsClear
+(
+    IN    uint32_t                        switchId,
+    IN    uint32_t                        flowTableNo,
+    IN    FPA_FLOW_TABLE_ENTRY_STC        *flowEntryPtr
+
+);
 
 /*******************************************************************************
 * fpaLibFlowTableStatisticsGet
@@ -520,6 +576,17 @@ FPA_STATUS fpaLibFlowTableDump
 (    
 	IN    uint32_t                        switchId,
     IN    uint32_t                        flowTableNo
+);
+FPA_STATUS fpaLibFlowTableDumpCpss
+(
+	IN    uint32_t                        switchId,
+    IN    uint32_t                        flowTableNo
+);
+FPA_STATUS fpaLibRulesDumpCpss
+(
+	IN    uint32_t                        dev,
+    IN    uint32_t                        start,
+    IN    uint32_t                        end
 );
 
 /******************************************************************************* 
@@ -802,7 +869,7 @@ FPA_STATUS fpaLibPortPropertiesGet
 (
     IN   uint32_t                   switchId,
     IN   uint32_t                   portNum,
-    OUT  FPA_PORT_PROPERTIES_STC    *propertiesPtr
+    INOUT  FPA_PORT_PROPERTIES_STC    *propertiesPtr
 );
 
 /*******************************************************************************
@@ -1474,6 +1541,28 @@ FPA_STATUS fpaLibDevicePortsParametes
 	IN 	uint32_t			portsConfigArraySize,
 	IN	FPA_PORT_MAP_STC	*portsMapArray,
 	IN	FPA_PORT_CONFIG_STC	*portsConfigArray
+);
+
+
+/*******************************************************************************
+* fpaProfileSet
+*
+* DESCRIPTION:
+*      set profile
+*
+* INPUTS:
+*
+* OUTPUTS:
+*
+*
+* RETURNS:
+*
+* COMMENTS:
+*
+*******************************************************************************/
+void fpaProfileSet
+(
+	IN PROFILE_STC * profile
 );
 
 #ifdef __cplusplus
