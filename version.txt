@@ -1,2 +1,2 @@
-fpa_version     1.0.1
+fpa_version     1.2.1
 fpa_release     1.8
